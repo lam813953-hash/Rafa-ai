@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Alam AI</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#ffffff">
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,sans-serif;background:#ffffff;height:100vh;display:flex;flex-direction:column}
+.top{background:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #e5e5e5}
+.top b{font-size:19px;letter-spacing:1px}
+select{padding:8px 10px;border-radius:20px;border:1px solid #ddd;background:white}
+.main{flex:1;display:flex;flex-direction:column;align-items:center;padding:12px;overflow:hidden}
+.faceWrap{width:180px;height:180px;margin-top:6px;position:relative}
+.face{width:180px;height:180px;background:#fff;border:2px solid #111;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:0 10px 30px rgba(0,0,0,0.10);position:relative;overflow:hidden}
+.face:before{content:"";position:absolute;top:0;left:0;right:0;height:35px;background:#f2f2f2;border-bottom:1px solid #eee}
+.eyes{display:flex;gap:32px;margin-top:18px;z-index:2}
+.eye{width:16px;height:16px;background:#111;border-radius:50%;animation:blink 4s infinite}
+@keyframes blink{0%,92%,100%{transform:scaleY(1)}94%{transform:scaleY(0.1)}}
+.cheek{display:flex;gap:55px;margin-top:8px}
+.cheek div{width:16px;height:8px;background:#ffcccc;border-radius:50%}
+.mouth{width:44px;height:12px;background:#111;border-radius:20px;transition:0.15s;margin-top:12px;z-index:2}
+.talking .mouth{height:26px;border-radius:50%;animation:talk 0.3s infinite alternate}
+@keyframes talk{from{height:12px}to{height:26px}}
+.status{margin:10px 0;font-size:13px;color:#555}
+.row{display:flex;gap:10px;align-items:center}
+#cam{width:130px;height:95px;object-fit:cover;border-radius:12px;border:1px solid #ddd;background:#000}
+#chat{width:100%;max-width:520px;flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding:10px 0}
+.msg{max-width:85%;padding:11px 14px;border-radius:16px;font-size:15px;line-height:1.5}
+.user{background:#111;color:#fff;align-self:flex-end}
+.bot{background:#f5f5f5;border:1px solid #eee;align-self:flex-start}
+.bottom{background:#fff;padding:12px;display:flex;gap:7px;border-top:1px solid #e5e5e5;flex-wrap:wrap}
+.bottom input{flex:1;min-width:140px;padding:13px;border:1px solid #ddd;border-radius:25px;outline:none}
+.btn{padding:12px 14px;border:none;border-radius:25px;background:#111;color:#fff;cursor:pointer}
+.btn2{background:#fff;color:#111;border:1px solid #ddd}
+</style>
+</head>
+<body>
+<div class="top">
+<b>ALAM AI</b>
+<select id="voiceSelect"><option value="female">Meyer Kontho</option><option value="male">Cheler Kontho</option></select>
+</div>
+
+<div class="main">
+<div class="faceWrap" id="faceBox"><div class="face" id="face">
+<div class="eyes"><div class="eye"></div><div class="eye"></div></div>
+<div class="cheek"><div></div><div></div></div>
+<div class="mouth" id="mouth"></div>
+</div></div>
+<div class="status" id="status">Shunche...</div>
+<div class="row">
+<video id="cam" autoplay muted playsinline></video>
+<button class="btn btn2" onclick="installApp()">App Hisabe Download</button>
+</div>
+<div id="chat"></div>
+</div>
+
+<div class="bottom">
+<input id="input" placeholder="Ekhane likho...">
+<button class="btn" onclick="startMic()">Mic</button>
+<button class="btn" onclick="send()">Send</button>
+<button class="btn btn2" onclick="downloadChat()">Chat Download</button>
+</div>
+
+<script>
+let chatHistory=[];
+let deferredPrompt=null;
+let femaleVoice=null, maleVoice=null;
+let questions=['Alam, aaj tomar mon kemon?','Alam, tumi aaj ki korla?','Alam, tumi ki golpo sunte chao?','Alam, tomar priyo manus ke? Bolo to.'];
+let qIndex=0;
+
+window.addEventListener('beforeinstallprompt',(e)=>{ e.preventDefault(); deferredPrompt=e; });
+function installApp(){
+  if(deferredPrompt){ deferredPrompt.prompt(); }
+  else{ alert('Chrome er 3 dot menu theke Add to Home Screen e click koro, tahole App hoye jabe.'); }
+}
+
+function loadVoices(){
+  let v=speechSynthesis.getVoices();
+  femaleVoice=v.find(x=>x.name.includes('Zira'))||v.find(x=>x.name.includes('Samantha'))||v.find(x=>x.name.includes('Google US English'))||v[0];
+  maleVoice=v.find(x=>x.name.includes('David'))||v.find(x=>x.name.includes('Daniel'))||v[1]||v[0];
+}
+speechSynthesis.onvoiceschanged=loadVoices; loadVoices();
+
+function speak(text){
+  speechSynthesis.cancel();
+  let u=new SpeechSynthesisUtterance(text);
+  u.lang='bn-BD'; u.rate=0.95;
+  let sel=document.getElementById('voiceSelect').value;
+  u.pitch= sel==='female'?1.5:0.7;
+  if(sel==='female'&&femaleVoice) u.voice=femaleVoice;
+  if(sel==='male'&&maleVoice) u.voice=maleVoice;
+  document.getElementById('faceBox').classList.add('talking');
+  document.getElementById('status').innerText='Kotha Bolche...';
+  u.onend=()=>{ document.getElementById('faceBox').classList.remove('talking'); document.getElementById('status').innerText='Shunche...'; };
+  speechSynthesis.speak(u);
+}
+
+function addMsg(t,c){
+  chatHistory.push((c==='user'?'Tumi: ':'Alam AI: ')+t);
+  let d=document.createElement('div'); d.className='msg '+c; d.innerText=t;
+  document.getElementById('chat').appendChild(d);
+  document.getElementById('chat').scrollTop=99999;
+}
+
+function reply(t){
+  let low=t.toLowerCase();
+  if(low.includes('kemon')) return 'Ami khub valo achi Alam, karon tumi ascho. Tumi bolo, tomar sorir kemon?';
+  if(low.includes('golpo')) return 'Thik ache Alam, suno. Rafi ekdin Ria ke bollo, tumi thakle amar din ta sundor hoye jay. Ria bollo, tahole amake kokhono chere jeo na. Tomar kache emon golpo kemon lage?';
+  if(low.includes('valo')) return 'Sune amar khub valo laglo. Alam, tumi ki amake roj golpo korte asba?';
+  if(low.includes('tomar nam')) return 'Amar nam Alam AI. Ami sudhu tomar sathe golpo korar jonno. Tomar nam to Alam, tai na?';
+  if(low.includes('bye')) return 'Thik ache Alam, valo theko. Ami tomar jonno opekkha korbo. Abar asba kintu.';
+  return 'Bah Alam, sundor bolcho. Ar ektu khule bolo to, ami mon diye sunchi.';
+}
+
+function send(){
+  let inp=document.getElementById('input');
+  let t=inp.value.trim(); if(!t) return;
+  addMsg(t,'user'); inp.value='';
+  setTimeout(()=>{ let r=reply(t); addMsg(r,'bot'); speak(r); },400);
+}
+
+function startMic(){
+  let SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){ alert('Chrome browser use koro'); return; }
+  let rec=new SR(); rec.lang='bn-BD';
+  document.getElementById('status').innerText='Tomar Kotha Shunchi... Bolo';
+  rec.onresult=(e)=>{ document.getElementById('input').value=e.results[0][0].transcript; send(); };
+  rec.start();
+}
+
+navigator.mediaDevices.getUserMedia({video:{facingMode:'user'}}).then(s=>{ document.getElementById('cam').srcObject=s; }).catch(()=>{});
+
+function downloadChat(){
+  let blob=new Blob([chatHistory.join('\n')],{type:'text/plain'});
+  let a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='alam-ai-chat.txt'; a.click();
+}
+document.getElementById('input').addEventListener('keydown',e=>{ if(e.key==='Enter') send(); });
+
+window.onload=()=>{
+  setTimeout(()=>{
+    let first='Hey Alam, kemon acho? Ami tomar Alam AI. Aaj amar sathe ki golpo korba?';
+    addMsg(first,'bot'); speak(first);
+    setInterval(()=>{
+      if(document.getElementById('chat').children.length<8){
+        let q=questions[qIndex%questions.length]; qIndex++;
+        addMsg(q,'bot'); speak(q);
+      }
+    },20000);
+  },800);
+};
+</script>
+</body>
+  </html>
